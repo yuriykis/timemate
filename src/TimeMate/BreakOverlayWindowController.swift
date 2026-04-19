@@ -113,6 +113,12 @@ class BreakOverlayWindowController: NSObject {
   }
 
   private func handleStateChange(state: PomodoroState, sessionType: SessionType) {
+    // Never show overlay in count-up mode
+    if timer.timerMode == .countUp {
+      hideWindows(animated: true)
+      return
+    }
+
     let isBreak = sessionType == .shortBreak || sessionType == .longBreak
     let shouldShow = state == .active && isBreak
 

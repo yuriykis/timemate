@@ -16,6 +16,11 @@ enum PomodoroState {
   case idle, active, paused
 }
 
+enum TimerMode: String, CaseIterable {
+  case pomodoro = "Pomodoro"
+  case countUp = "Count Up"
+}
+
 class PomodoroTimer: ObservableObject {
   // MARK: - Published Properties for UI
   @Published var timeRemaining: Int = 0
@@ -23,8 +28,11 @@ class PomodoroTimer: ObservableObject {
   @Published var currentSessionType: SessionType = .focus
   @Published var focusSessionsCompleted: Int = 0
   @Published var progress: Double = 1.0
+  @Published var timerMode: TimerMode = .pomodoro
+  @Published var elapsedTime: Int = 0
 
   // MARK: - AppStorage Settings
+  @AppStorage("timerMode") private var savedTimerMode: String = TimerMode.pomodoro.rawValue
   @AppStorage("focusDuration") private var focusDurationMinutes = 25
   @AppStorage("shortBreakDuration") private var shortBreakDurationMinutes = 5
   @AppStorage("longBreakDuration") private var longBreakDurationMinutes = 15
@@ -38,34 +46,74 @@ class PomodoroTimer: ObservableObject {
   private var timer: AnyCancellable?
   private var totalDuration: Int = 0
 
+  var displayTime: Int {
+    switch timerMode {
+    case .pomodoro: return timeRemaining
+    case .countUp: return elapsedTime
+    }
+  }
+
   init() {
-    resetForCurrentSession()
+    let mode = TimerMode(rawValue: savedTimerMode) ?? .pomodoro
+    self.timerMode = mode
+    if mode == .pomodoro {
+      resetForCurrentSession()
+    }
 
     #if DEBUG
       print("--- TimeMate running in DEBUG mode (timers are in seconds) ---")
     #endif
   }
 
-  func startTimer() {
-    if state != .paused {
+  func switchMode(to newMode: TimerMode) {
+    guard state == .idle else { return }
+    timerMode = newMode
+    savedTimerMode = newMode.rawValue
+    switch newMode {
+    case .pomodoro:
+      elapsedTime = 0
       resetForCurrentSession()
+    case .countUp:
+      elapsedTime = 0
+      timeRemaining = 0
+      progress = 0.0
     }
-    state = .active
+  }
 
-    timer = Timer.publish(every: 1, on: .main, in: .common)
-      .autoconnect()
-      .sink { [weak self] _ in
-        guard let self = self else { return }
-        if self.timeRemaining > 0 {
-          self.timeRemaining -= 1
-          self.progress = Double(self.timeRemaining) / Double(max(1, self.totalDuration))
-        } else {
-          self.timer?.cancel()
-          self.playSound(named: self.alarmSound)
-          self.sendNotification()
-          self.advanceToNextSession()
-        }
+  func startTimer() {
+    switch timerMode {
+    case .pomodoro:
+      if state != .paused {
+        resetForCurrentSession()
       }
+      state = .active
+
+      timer = Timer.publish(every: 1, on: .main, in: .common)
+        .autoconnect()
+        .sink { [weak self] _ in
+          guard let self = self else { return }
+          if self.timeRemaining > 0 {
+            self.timeRemaining -= 1
+            self.progress = Double(self.timeRemaining) / Double(max(1, self.totalDuration))
+          } else {
+            self.timer?.cancel()
+            self.playSound(named: self.alarmSound)
+            self.sendNotification()
+            self.advanceToNextSession()
+          }
+        }
+
+    case .countUp:
+      state = .active
+
+      timer = Timer.publish(every: 1, on: .main, in: .common)
+        .autoconnect()
+        .sink { [weak self] _ in
+          guard let self = self else { return }
+          self.elapsedTime += 1
+          self.progress = min(1.0, Double(self.elapsedTime) / 3600.0)
+        }
+    }
   }
 
   func pauseTimer() {
@@ -76,15 +124,23 @@ class PomodoroTimer: ObservableObject {
   func stopTimer() {
     state = .idle
     timer?.cancel()
-    resetForCurrentSession()
+    switch timerMode {
+    case .pomodoro:
+      resetForCurrentSession()
+    case .countUp:
+      elapsedTime = 0
+      progress = 0.0
+    }
   }
 
   func skipSession() {
+    guard timerMode == .pomodoro else { return }
     timer?.cancel()
     advanceToNextSession()
   }
 
   func restartCycle() {
+    guard timerMode == .pomodoro else { return }
     state = .idle
     focusSessionsCompleted = 0
     currentSessionType = .focus

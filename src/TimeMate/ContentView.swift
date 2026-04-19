@@ -20,6 +20,19 @@ struct ContentView: View {
 
   var body: some View {
     VStack(spacing: 12) {
+      if timer.state == .idle {
+        Picker("Mode", selection: Binding(
+          get: { timer.timerMode },
+          set: { timer.switchMode(to: $0) }
+        )) {
+          ForEach(TimerMode.allCases, id: \.self) { mode in
+            Text(LocalizedStringKey(mode.rawValue)).tag(mode)
+          }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal)
+      }
+
       TimerDisplayView(settingsVisible: $settingsVisible, showProgressCircle: $showProgressCircle)
       ControlButtonsView()
 
@@ -39,7 +52,7 @@ struct ContentView: View {
     .background(Color(hex: backgroundColorHex) ?? .clear)
     .contentShape(Rectangle())
     .onChange(of: [focusDuration, shortBreakDuration, longBreakDuration]) { _ in
-      if timer.state == .idle {
+      if timer.state == .idle && timer.timerMode == .pomodoro {
         timer.stopTimer()
       }
     }
@@ -59,6 +72,9 @@ private struct TimerDisplayView: View {
   @AppStorage("longBreakInterval") private var longBreakInterval = 4
 
   private var accentColor: Color {
+    if timer.timerMode == .countUp {
+      return .purple
+    }
     switch timer.currentSessionType {
     case .focus: return .accentColor
     case .shortBreak: return .green
@@ -67,6 +83,9 @@ private struct TimerDisplayView: View {
   }
 
   private var sessionIcon: String {
+    if timer.timerMode == .countUp {
+      return "stopwatch.fill"
+    }
     switch timer.currentSessionType {
     case .focus: return "brain.head.profile"
     case .shortBreak: return "cup.and.saucer.fill"
@@ -74,12 +93,19 @@ private struct TimerDisplayView: View {
     }
   }
 
+  private var sessionLabel: LocalizedStringKey {
+    if timer.timerMode == .countUp {
+      return LocalizedStringKey("Count Up")
+    }
+    return LocalizedStringKey(timer.currentSessionType.rawValue)
+  }
+
   var body: some View {
     VStack(spacing: 8) {
       HStack {
         HStack(spacing: 6) {
           Image(systemName: sessionIcon)
-          Text(LocalizedStringKey(timer.currentSessionType.rawValue))
+          Text(sessionLabel)
         }
         .font(.headline)
         .foregroundColor(.secondary)
@@ -106,23 +132,25 @@ private struct TimerDisplayView: View {
             .animation(.linear, value: timer.progress)
 
           VStack {
-            Text(timer.timeRemaining.toMinuteSecondString())
+            Text(timer.displayTime.toHourMinuteSecondString())
               .font(.system(size: 32, weight: .bold, design: .monospaced))
               .foregroundColor(accentColor)
           }
         }
         .frame(width: 120, height: 120)
       } else {
-        Text(timer.timeRemaining.toMinuteSecondString())
+        Text(timer.displayTime.toHourMinuteSecondString())
           .font(.system(size: 32, weight: .bold, design: .monospaced))
           .foregroundColor(accentColor)
       }
 
-      CycleIndicatorView(
-        completed: timer.focusSessionsCompleted,
-        total: longBreakInterval,
-        isLongBreak: timer.currentSessionType == .longBreak
-      )
+      if timer.timerMode == .pomodoro {
+        CycleIndicatorView(
+          completed: timer.focusSessionsCompleted,
+          total: longBreakInterval,
+          isLongBreak: timer.currentSessionType == .longBreak
+        )
+      }
     }
   }
 }
@@ -215,12 +243,14 @@ private struct ControlButtonsView: View {
 
   var body: some View {
     HStack(spacing: 16) {
-      Button {
-        timer.restartCycle()
-      } label: {
-        Image(systemName: "backward.end.fill")
+      if timer.timerMode == .pomodoro {
+        Button {
+          timer.restartCycle()
+        } label: {
+          Image(systemName: "backward.end.fill")
+        }
+        .buttonStyle(.bordered).controlSize(.large).accessibilityLabel("Restart")
       }
-      .buttonStyle(.bordered).controlSize(.large).accessibilityLabel("Restart")
 
       Button {
         timer.stopTimer()
@@ -236,24 +266,29 @@ private struct ControlButtonsView: View {
       .buttonStyle(.borderedProminent).tint(mainButtonColor).controlSize(.large)
       .accessibilityLabel(mainButtonAccessibilityLabel)
 
-      Button {
-        timer.skipSession()
-      } label: {
-        Image(systemName: "forward.end.fill")
+      if timer.timerMode == .pomodoro {
+        Button {
+          timer.skipSession()
+        } label: {
+          Image(systemName: "forward.end.fill")
+        }
+        .buttonStyle(.bordered).controlSize(.large).accessibilityLabel("Skip")
       }
-      .buttonStyle(.bordered).controlSize(.large).accessibilityLabel("Skip")
     }
   }
 }
 
 private struct SettingsView: View {
+  @EnvironmentObject var timer: PomodoroTimer
   @Binding var showProgressCircle: Bool
   @Binding var backgroundColorHex: String
 
   var body: some View {
     VStack(alignment: .leading, spacing: 18) {
-      DurationSettingsView()
-      Divider()
+      if timer.timerMode == .pomodoro {
+        DurationSettingsView()
+        Divider()
+      }
       SystemSettingsView(
         showProgressCircle: $showProgressCircle, backgroundColorHex: $backgroundColorHex)
       Divider()
@@ -265,6 +300,7 @@ private struct SettingsView: View {
 }
 
 private struct SystemSettingsView: View {
+  @EnvironmentObject var timer: PomodoroTimer
   @EnvironmentObject var appDelegate: AppDelegate
   @Binding var showProgressCircle: Bool
   @Binding var backgroundColorHex: String
@@ -320,7 +356,9 @@ private struct SystemSettingsView: View {
           appDelegate.setKeepAwake(enabled: newValue)
         }
       Divider()
-      Toggle(LocalizedStringKey("Enable Break Overlay"), isOn: $overlayEnabled)
+      if timer.timerMode == .pomodoro {
+        Toggle(LocalizedStringKey("Enable Break Overlay"), isOn: $overlayEnabled)
+      }
       Toggle(LocalizedStringKey("Enable Notifications"), isOn: $notificationsEnabled)
       Divider()
       Toggle("Hide time in menu bar", isOn: $hideMenuBarTime)
@@ -328,7 +366,9 @@ private struct SystemSettingsView: View {
           appDelegate.updateMenuBarWidth(hideTime: newValue)
         }
       Toggle("Show Progress Circle", isOn: $showProgressCircle)
-      Toggle("Auto-start next session", isOn: $autoStartNextSession)
+      if timer.timerMode == .pomodoro {
+        Toggle("Auto-start next session", isOn: $autoStartNextSession)
+      }
       Picker("Alarm Sound", selection: $alarmSound) {
         ForEach(soundOptions, id: \.self) { Text($0) }
       }

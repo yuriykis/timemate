@@ -158,6 +158,13 @@ private struct MenuBarView: View {
   @Binding var hideTime: Bool
 
   private var iconName: String {
+    if timer.timerMode == .countUp {
+      switch timer.state {
+      case .paused: return "pause.circle.fill"
+      case .idle: return "stopwatch"
+      case .active: return "stopwatch.fill"
+      }
+    }
     switch timer.state {
     case .paused:
       return "pause.circle.fill"
@@ -170,6 +177,9 @@ private struct MenuBarView: View {
   }
 
   private var accentColor: Color {
+    if timer.timerMode == .countUp {
+      return timer.state == .paused ? .orange : .purple
+    }
     if timer.state == .paused {
       return .orange
     }
@@ -200,7 +210,7 @@ private struct MenuBarView: View {
         .foregroundColor(timer.state == .active ? .white : Color(nsColor: .headerTextColor))
 
       if !hideTime {
-        Text(timer.timeRemaining.toMinuteSecondString())
+        Text(timer.displayTime.toHourMinuteSecondString())
           .font(.system(size: NSFont.systemFontSize + 1, design: .monospaced).weight(.bold))
           .foregroundColor(foregroundColor)
       }
