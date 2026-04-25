@@ -14,7 +14,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
   private var hostingController: NSHostingController<AnyView>!
   private let sleepPreventer = SleepPreventer()
   private var breakOverlayController: BreakOverlayWindowController!
+  private var menuBarCancellables = Set<AnyCancellable>()
   @AppStorage("hideMenuBarTime") private var hideMenuBarTime = false
+
+  private func menuBarWidth() -> CGFloat {
+    if hideMenuBarTime { return 24.0 }
+    let seconds = timer.displayTime
+    if seconds >= 36000 { return 132.0 }  // HH:MM:SS
+    if seconds >= 3600 { return 120.0 }   // H:MM:SS
+    return 90.0                           // MM:SS
+  }
 
   // MARK: - App Lifecycle
   func applicationDidFinishLaunching(_ notification: Notification) {
@@ -38,7 +47,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     NSColorPanel.shared.showsAlpha = true
 
-    let initialWidth = hideMenuBarTime ? 24.0 : 90.0
+    let initialWidth = menuBarWidth()
     statusItem = NSStatusBar.system.statusItem(withLength: initialWidth)
 
     let menuBarView = MenuBarView(timer: timer, hideTime: $hideMenuBarTime)
@@ -69,6 +78,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     // --- Break Overlay ---
     breakOverlayController = BreakOverlayWindowController(timer: timer)
+
+    // Resize the menu bar slot when the displayed time changes (e.g. crosses 1h boundary)
+    timer.objectWillChange
+      .receive(on: RunLoop.main)
+      .sink { [weak self] in
+        guard let self = self else { return }
+        let newWidth = self.menuBarWidth()
+        if self.statusItem.length != newWidth {
+          self.statusItem.length = newWidth
+          self.statusItem.button?.subviews.first?.frame =
+            self.statusItem.button?.bounds ?? .zero
+        }
+      }
+      .store(in: &menuBarCancellables)
   }
 
   func updatePopoverSize() {
@@ -95,7 +118,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
   }
 
   func updateMenuBarWidth(hideTime: Bool) {
-    let newWidth = hideTime ? 24.0 : 90.0
+    let newWidth = menuBarWidth()
     let wasShown = popover.isShown
 
     // Close popover if shown to reposition it
@@ -215,6 +238,14 @@ private struct MenuBarView: View {
           .foregroundColor(foregroundColor)
       }
     }
-    .frame(width: hideTime ? 24 : 90, height: NSStatusBar.system.thickness, alignment: .center)
+    .frame(width: frameWidth, height: NSStatusBar.system.thickness, alignment: .center)
+  }
+
+  private var frameWidth: CGFloat {
+    if hideTime { return 24 }
+    let seconds = timer.displayTime
+    if seconds >= 36000 { return 132 }
+    if seconds >= 3600 { return 120 }
+    return 90
   }
 }

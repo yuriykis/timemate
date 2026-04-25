@@ -135,6 +135,9 @@ private struct TimerDisplayView: View {
             Text(timer.displayTime.toHourMinuteSecondString())
               .font(.system(size: 32, weight: .bold, design: .monospaced))
               .foregroundColor(accentColor)
+              .lineLimit(1)
+              .minimumScaleFactor(0.5)
+              .padding(.horizontal, 18)
           }
         }
         .frame(width: 120, height: 120)
@@ -142,6 +145,8 @@ private struct TimerDisplayView: View {
         Text(timer.displayTime.toHourMinuteSecondString())
           .font(.system(size: 32, weight: .bold, design: .monospaced))
           .foregroundColor(accentColor)
+          .lineLimit(1)
+          .minimumScaleFactor(0.5)
       }
 
       if timer.timerMode == .pomodoro {
