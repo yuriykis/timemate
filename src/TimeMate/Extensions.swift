@@ -80,4 +80,8 @@ func resetAllSettings() {
   @objc dynamic var keepAwake: Bool {
     return bool(forKey: "keepAwake")
   }
+
+  @objc dynamic var showDesktopWidget: Bool {
+    return bool(forKey: "showDesktopWidget")
+  }
 }

@@ -321,6 +321,7 @@ private struct SystemSettingsView: View {
   @AppStorage("overlayEnabled") private var overlayEnabled = true
   @AppStorage("notificationsEnabled") private var notificationsEnabled = true
   @AppStorage("hideMenuBarTime") private var hideMenuBarTime = false
+  @AppStorage("showDesktopWidget") private var showDesktopWidget = true
 
   private let soundOptions = [
     "Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr",
@@ -370,6 +371,7 @@ private struct SystemSettingsView: View {
         .onChange(of: hideMenuBarTime) { newValue in
           appDelegate.updateMenuBarWidth(hideTime: newValue)
         }
+      Toggle("Show desktop widget", isOn: $showDesktopWidget)
       Toggle("Show Progress Circle", isOn: $showProgressCircle)
       if timer.timerMode == .pomodoro {
         Toggle("Auto-start next session", isOn: $autoStartNextSession)

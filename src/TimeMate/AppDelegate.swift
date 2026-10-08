@@ -14,6 +14,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
   private var hostingController: NSHostingController<AnyView>!
   private let sleepPreventer = SleepPreventer()
   private var breakOverlayController: BreakOverlayWindowController!
+  private var desktopWidgetController: DesktopWidgetWindowController!
   private var menuBarCancellables = Set<AnyCancellable>()
   @AppStorage("hideMenuBarTime") private var hideMenuBarTime = false
 
@@ -39,6 +40,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
       "alwaysVisible": false,
       "showProgressCircle": true,
       "autoStartNextSession": true,
+      "showDesktopWidget": true,
     ])
 
     UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) {
@@ -78,6 +80,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     // --- Break Overlay ---
     breakOverlayController = BreakOverlayWindowController(timer: timer)
+
+    // --- Desktop Widget ---
+    desktopWidgetController = DesktopWidgetWindowController(timer: timer)
 
     // Resize the menu bar slot when the displayed time changes (e.g. crosses 1h boundary)
     timer.objectWillChange
@@ -181,37 +186,11 @@ private struct MenuBarView: View {
   @Binding var hideTime: Bool
 
   private var iconName: String {
-    if timer.timerMode == .countUp {
-      switch timer.state {
-      case .paused: return "pause.circle.fill"
-      case .idle: return "stopwatch"
-      case .active: return "stopwatch.fill"
-      }
-    }
-    switch timer.state {
-    case .paused:
-      return "pause.circle.fill"
-    case .idle:
-      return "timer"
-    case .active:
-      return timer.currentSessionType == .focus
-        ? "play.circle.fill" : timer.currentSessionType.style.iconName
-    }
+    timer.statusIconName
   }
 
   private var accentColor: Color {
-    if timer.timerMode == .countUp {
-      return timer.state == .paused ? .orange : .purple
-    }
-    if timer.state == .paused {
-      return .orange
-    }
-    let activeColor = timer.currentSessionType.style.color
-
-    if timer.currentSessionType == .shortBreak || timer.currentSessionType == .longBreak {
-      return activeColor.opacity(0.8)
-    }
-    return activeColor
+    timer.statusAccentColor
   }
 
   private var foregroundColor: Color {
